@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4 in a Row</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        .game-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .login-form {
+            text-align: center;
+        }
+
+        .login-form input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .login-form button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .login-form button:hover {
+            opacity: 0.9;
+        }
+
+        .game-info {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .game-info h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+        }
+
+        .player {
+            text-align: center;
+        }
+
+        .player-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .player-disc {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            margin: 0 auto;
+        }
+
+        .player1 .player-disc {
+            background: #f44336;
+        }
+
+        .player2 .player-disc {
+            background: #ffd700;
+        }
+
+        .active-player {
+            border: 3px solid #4caf50;
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .board {
+            background: #2196F3;
+            padding: 20px;
+            border-radius: 15px;
+            display: inline-block;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .cell {
+            width: 60px;
+            height: 60px;
+            background: white;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .cell:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255,255,255,0.8);
+        }
+
+        .cell.player1 {
+            background: #f44336;
+        }
+
+        .cell.player2 {
+            background: #ffd700;
+        }
+
+        .cell.disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .cell.disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .status.waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.playing {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.finished {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .leaderboard h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .leaderboard-list {
+            list-style: none;
+        }
+
+        .leaderboard-item {
+            padding: 10px;
+            background: #f8f9fa;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .leaderboard-item:nth-child(1) {
+            background: #ffd700;
+            font-weight: bold;
+        }
+
+        .leaderboard-item:nth-child(2) {
+            background: #c0c0c0;
+        }
+
+        .leaderboard-item:nth-child(3) {
+            background: #cd7f32;
+        }
+
+        .analytics h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .stat:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #666;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .cell {
+                width: 45px;
+                height: 45px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 4 in a Row</h1>
+            <p>Connect four discs to win!</p>
+        </div>
+
+        <div class="main-content">
+            <div class="game-section">
+                <div id="loginScreen" class="login-form">
+                    <h2>Enter Your Username</h2>
+                    <input type="text" id="usernameInput" placeholder="Your username..." maxlength="20">
+                    <button onclick="joinGame()">Join Game</button>
+                </div>
+
+                <div id="gameScreen" class="hidden">
+                    <div class="game-info">
+                        <h3 id="gameStatus">Waiting...</h3>
+                        <div class="player-info">
+                            <div class="player player1" id="player1Info">
+                                <div class="player-name">Player 1</div>
+                                <div class="player-disc"></div>
+                            </div>
+                            <div class="player player2" id="player2Info">
+                                <div class="player-name">Player 2</div>
+                                <div class="player-disc"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center;">
+                        <div class="board" id="board"></div>
+                    </div>
+
+                    <div id="statusMessage" class="status waiting">
+                        Waiting for opponent...
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="card leaderboard">
+                    <h3>🏆 Leaderboard</h3>
+                    <ul class="leaderboard-list" id="leaderboardList">
+                        <li class="leaderboard-item">Loading...</li>
+                    </ul>
+                </div>
+
+                <div class="card analytics">
+                    <h3>📊 Analytics</h3>
+                    <div id="analyticsList">
+                        <div class="stat">
+                            <span class="stat-label">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws;
+        let currentUsername;
+        let currentGame;
+        let myPlayerNum;
+
+        function joinGame() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+
+            currentUsername = username;
+            connectWebSocket();
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    username: currentUsername
+                }));
+                
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('gameScreen').classList.remove('hidden');
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                handleMessage(msg);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                setTimeout(() => {
+                    if (currentUsername) {
+                        reconnect();
+                    }
+                }, 2000);
+            };
+        }
+
+        function reconnect() {
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            ws.onopen = () => {
+                ws.send(JSON.stringify({
+                    type: 'reconnect',
+                    username: currentUsername
+                }));
+            };
+            ws.onmessage = (event) => handleMessage(JSON.parse(event.data));
+        }
+
+       function handleMessage(msg) {
+            console.log('Received:', msg);
+
+            switch(msg.type) {
+                case 'waiting':
+                    updateStatus('Waiting for opponent...', 'waiting');
+                    break;
+                
+                // --- ADD THIS CASE. IT WAS MISSING ---
+                case 'game_start': 
+                    currentGame = msg.data;
+                    setupGame();
+                    break;
+                // --- END OF FIX ---
+
+                case 'game_update':
+                    // --- ADD THIS CHECK ---
+                    if (!currentGame) {
+                        // This is the first update, so set up the board
+                        currentGame = msg.data;
+                        setupGame();
+                    } else {
+                        currentGame = msg.data;
+                        updateGame();
+                    }
+                    break;
+                
+                case 'reconnected':
+                    currentGame = msg.data;
+                    setupGame();
+                    break;
+                
+                case 'error':
+                    alert(msg.data.message);
+                    break;
+            }
+        }
+        function setupGame() {
+            // Determine player number
+            if (currentGame.player1 === currentUsername) {
+                myPlayerNum = 1;
+            } else {
+                myPlayerNum = 2;
+            }
+
+            // Update player names
+            document.querySelector('#player1Info .player-name').textContent = currentGame.player1;
+            document.querySelector('#player2Info .player-name').textContent = currentGame.player2;
+
+            renderBoard();
+            updateGame();
+            updateStatus(`Game started! ${currentGame.isBot ? 'vs Bot' : 'vs ' + (myPlayerNum === 1 ? currentGame.player2 : currentGame.player1)}`, 'playing');
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            for (let row = 0; row < 6; row++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row';
+                
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.onclick = () => makeMove(col);
+                    rowDiv.appendChild(cell);
+                }
+                
+                board.appendChild(rowDiv);
+            }
+        }
+
+        function updateGame() {
+            if (!currentGame) return;
+
+            // Update board
+            for (let row = 0; row < 6; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (!cell) continue;
+                    
+                    cell.className = 'cell';
+                    
+                    if (currentGame.board[row][col] === 1) {
+                        cell.classList.add('player1');
+                    } else if (currentGame.board[row][col] === 2) {
+                        cell.classList.add('player2');
+                    }
+                    
+                    // Disable if not player's turn or game finished
+                    if (currentGame.status !== 'playing' || currentGame.currentPlayer !== myPlayerNum) {
+                        cell.classList.add('disabled');
+                    }
+                }
+            }
+
+            // Update active player indicator
+            document.getElementById('player1Info').classList.remove('active-player');
+            document.getElementById('player2Info').classList.remove('active-player');
+            
+            if (currentGame.status === 'playing') {
+                if (currentGame.currentPlayer === 1) {
+                    document.getElementById('player1Info').classList.add('active-player');
+                } else {
+                    document.getElementById('player2Info').classList.add('active-player');
+                }
+            }
+
+            // Update status
+            if (currentGame.status === 'finished') {
+                let message = '';
+                if (currentGame.winner === 0) {
+                    message = "It's a draw!";
+                } else if (currentGame.winner === myPlayerNum) {
+                    message = "🎉 You won!";
+                } else {
+                    message = "You lost. Better luck next time!";
+                }
+                updateStatus(message, 'finished');
+                
+                // Reload leaderboard after game
+                setTimeout(() => {
+                    loadLeaderboard();
+                    loadAnalytics();
+                }, 1000);
+            } else if (currentGame.currentPlayer === myPlayerNum) {
+                updateStatus('Your turn!', 'playing');
+            } else {
+                updateStatus('Opponent\'s turn...', 'playing');
+            }
+        }
+
+        function makeMove(col) {
+            if (!currentGame || currentGame.status !== 'playing' || currentGame.currentPlayer !== myPlayerNum) {
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'move',
+                column: col
+            }));
+        }
+
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            const gameStatusEl = document.getElementById('gameStatus');
+            
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            gameStatusEl.textContent = message;
+        }
+
+        function loadLeaderboard() {
+            fetch('/api/leaderboard')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('leaderboardList');
+                    list.innerHTML = '';
+                    
+                    if (!data || data.length === 0) {
+                        list.innerHTML = '<li class="leaderboard-item">No players yet</li>';
+                        return;
+                    }
+                    
+                    data.forEach((player, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'leaderboard-item';
+                        li.innerHTML = `
+                            <span>${index + 1}. ${player.username}</span>
+                            <span>${player.gamesWon} wins</span>
+                        `;
+                        list.appendChild(li);
+                    });
+                })
+                .catch(err => console.error('Error loading leaderboard:', err));
+        }
+
+        function loadAnalytics() {
+            fetch('/api/analytics')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('analyticsList');
+                    list.innerHTML = `
+                        <div class="stat">
+                            <span class="stat-label">Total Games:</span>
+                            <span class="stat-value">${data.totalGames || 0}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Avg Duration:</span>
+                            <span class="stat-value">${Math.round(data.avgDuration || 0)}s</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Bot Games:</span>
+                            <span class="stat-value">${data.botGames || 0}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Player Games:</span>
+                            <span class="stat-value">${data.playerGames || 0}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Games Today:</span>
+                            <span class="stat-value">${data.gamesToday || 0}</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-label">Top Winner:</span>
+                            <span class="stat-value">${data.mostFrequentWinner || 'N/A'}</span>
+                        </div>
+                    `;
+                })
+                .catch(err => console.error('Error loading analytics:', err));
+        }
+
+        // Load leaderboard and analytics on page load
+        loadLeaderboard();
+        loadAnalytics();
+        
+        // Refresh leaderboard every 30 seconds
+        setInterval(loadLeaderboard, 30000);
+        setInterval(loadAnalytics, 30000);
+    </script>
+</body>
+</html>
