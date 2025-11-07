@@ -112,7 +112,9 @@ docker-compose up --build -d
 
 <div align="center">
 
-**🌐 The application will be available at:** [http://localhost:8080](http://localhost:8080)
+**🌐 The application will be available at:** [http://localhost:8081](http://localhost:8081)
+**🌐 The Kafka-UI will be available at:** [http://localhost:8080](http://localhost:8080)
+
 
 </div>
 
@@ -120,7 +122,7 @@ docker-compose up --build -d
 
 | Service | Description | Port |
 |---------|-------------|------|
-| `app` | The main Go server | 8080 |
+| `app` | The main Go server | 8081 |
 | `consumer` | The Go analytics consumer | - |
 | `db` | The PostgreSQL database | 5432 |
 | `kafka` | The Kafka broker | 9092 |
@@ -150,7 +152,7 @@ docker-compose up -d db zookeeper kafka
 ```bash
 export DATABASE_URL="postgres://postgres:postgres@localhost:5432/connect4?sslmode=disable"
 export KAFKA_BROKERS="localhost:9092"
-export PORT="8080"
+export PORT="8081"
 ```
 
 ### 4. Run the Main App
@@ -175,7 +177,7 @@ go run ./consumer/
 
 | Step | Action | Description |
 |------|--------|-------------|
-| **1** | **Open the Game** | Navigate to [http://localhost:8080](http://localhost:8080) |
+| **1** | **Open the Game** | Navigate to [http://localhost:8081](http://localhost:8081) |
 | **2** | **Enter Username** | Type your username and click "Join Game" |
 | **3** | **Wait for Opponent** | **1v1:** Another player joins within 10 seconds<br>**1vBot:** Bot joins automatically if no player |
 | **4** | **Make Moves** | Click on any column to drop your disc |
