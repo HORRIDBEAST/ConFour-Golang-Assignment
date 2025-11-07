@@ -1,68 +1,79 @@
-version: '3.8'
-
 services:
-  # 1. Your Main Go Application
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command: >
+      redpanda start --overprovisioned --smp 1 --memory 1G
+      --reserve-memory 0M --set redpanda.enable_coproc=false
+      --pandaproxy-addr 0.0.0.0:8082
+      --advertise-kafka-addr redpanda:9092
+    ports:
+      - "9092:9092"     # Kafka bootstrap
+      - "8082:8082"     # REST / Pandaproxy
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info"]
+      interval: 10s
+      retries: 5
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: connect4
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # NEW: Add a healthcheck for postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d connect4"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "redpanda:9092"
+    ports:
+      - "8080:8080" # This UI will be on port 8080
+    # MODIFIED: Wait for redpanda to be healthy
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@db:5432/connect4?sslmode=disable
-      - KAFKA_BROKERS=kafka:9092
-      - PORT=8080
+      PORT: "8080" # The app runs on 8080 *inside* Docker
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/connect4?sslmode=disable"
+      KAFKA_BROKERS: "redpanda:9092"
+    ports:
+      - "8081:8080"   # We access the app from our computer on port 8081
+    # MODIFIED: Wait for redpanda AND postgres to be healthy
     depends_on:
-      - db
-      - kafka
-    restart: on-failure
+      redpanda:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
-  # 2. Your Kafka Consumer
   consumer:
     build:
       context: .
       dockerfile: Dockerfile.consumer
     environment:
-      - KAFKA_BROKERS=kafka:9092
+      KAFKA_BROKERS: "redpanda:9092"
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/connect4?sslmode=disable"
+    # MODIFIED: Wait for redpanda AND postgres to be healthy
     depends_on:
-      - kafka
-    restart: on-failure
-
-  # 3. Postgres Database
-  db:
-    image: postgres:14-alpine
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=connect4
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-
-  # 4. Zookeeper (Kafka's dependency)
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.3.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
-  # 5. Kafka Broker
-  kafka:
-    image: confluentinc/cp-kafka:7.3.0
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      redpanda:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
 volumes:
-  postgres-data:
+  db-data:
