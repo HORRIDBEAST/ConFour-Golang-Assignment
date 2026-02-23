@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4 in a Row - Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes dropDisc {
+            0% { transform: translateY(-500px) rotate(0deg); }
+            60% { transform: translateY(0) rotate(180deg); }
+            80% { transform: translateY(-10px) rotate(180deg); }
+            100% { transform: translateY(0) rotate(180deg); }
+        }
+
+        @keyframes winnerPulse {
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.2); filter: brightness(1.5); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes confetti {
+            0% { transform: translateY(-100vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 25px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .game-info {
+            margin-bottom: 30px;
+        }
+
+        .game-info h3 {
+            text-align: center;
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+
+        .player {
+            text-align: center;
+            padding: 15px 30px;
+            border-radius: 15px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            transition: all 0.3s ease;
+        }
+
+        .player.active-player {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            transform: scale(1.1);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4);
+        }
+
+        .player.player1 .player-disc {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin: 10px auto 0;
+            box-shadow: 0 5px 15px rgba(244, 67, 54, 0.5);
+        }
+
+        .player.player2 .player-disc {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin: 10px auto 0;
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.5);
+        }
+
+        .player-name {
+            font-weight: 700;
+            font-size: 1.2em;
+            color: #333;
+        }
+
+        .board {
+            display: inline-block;
+            padding: 25px;
+            background: linear-gradient(145deg, #667eea, #764ba2);
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .cell {
+            width: 65px;
+            height: 65px;
+            background: linear-gradient(145deg, #ffffff, #e8e8e8);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 25px rgba(255, 255, 255, 0.8), inset 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell.player1 {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+            box-shadow: 0 5px 20px rgba(244, 67, 54, 0.5), inset 0 2px 5px rgba(255, 255, 255, 0.3);
+            animation: dropDisc 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .cell.player2 {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            box-shadow: 0 5px 20px rgba(255, 215, 0, 0.5), inset 0 2px 5px rgba(255, 255, 255, 0.3);
+            animation: dropDisc 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .cell.winning {
+            animation: winnerPulse 0.8s ease-in-out infinite;
+            z-index: 10;
+        }
+
+        .cell.disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .status {
+            text-align: center;
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 15px;
+            font-weight: 700;
+            font-size: 1.3em;
+            letter-spacing: 1px;
+        }
+
+        .status.waiting {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            color: #856404;
+            border: 2px solid #ffc107;
+        }
+
+        .status.playing {
+            background: linear-gradient(135deg, #d4edda, #b7e4c7);
+            color: #155724;
+            border: 2px solid #28a745;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status.finished {
+            background: linear-gradient(135deg, #d1ecf1, #a8dadc);
+            color: #0c5460;
+            border: 2px solid #17a2b8;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 700;
+            width: 100%;
+            margin-top: 15px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #f0f;
+            animation: confetti 3s linear forwards;
+        }
+
+        .game-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: 700;
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 4 IN A ROW</h1>
+        </div>
+
+        <div class="game-info">
+            <h3 id="gameStatus">⏳ Loading game...</h3>
+            <div class="player-info">
+                <div class="player player1" id="player1Info">
+                    <div class="player-name">Player 1</div>
+                    <div class="player-disc"></div>
+                </div>
+                <div class="player player2" id="player2Info">
+                    <div class="player-name">Player 2</div>
+                    <div class="player-disc"></div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center;">
+            <div class="board" id="board"></div>
+        </div>
+
+        <div id="statusMessage" class="status playing">
+            ⏳ Loading...
+        </div>
+
+        <div class="game-stats">
+            <div class="stat-item">
+                <div class="stat-label">⏱️ Game Time</div>
+                <div class="stat-value" id="gameTimer">0s</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">🎮 Game Mode</div>
+                <div class="stat-value" id="gameMode">-</div>
+            </div>
+        </div>
+        
+        <button id="playAgainButton" class="btn-primary hidden" onclick="playAgain()">🔄 Play Again</button>
+        <button class="btn-primary" onclick="goHome()" style="background: linear-gradient(135deg, #6c757d, #5a6268); margin-top: 10px;">🏠 Back to Lobby</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentGame = null;
+        let currentUsername = null;
+        let myPlayerNum = null;
+        let gameStartTime = null;
+        let gameTimerInterval = null;
+
+        // Retrieve game data from sessionStorage
+        function initGame() {
+            currentUsername = sessionStorage.getItem('currentUsername');
+            const gameDataString = sessionStorage.getItem('initialGameData');
+            
+            if (!currentUsername) {
+                alert('No active session found. Redirecting to lobby...');
+                window.location.href = '/';
+                return;
+            }
+
+            connectWebSocket();
+
+            // If we have initial game data (from game_start), set it up
+            if (gameDataString) {
+                try {
+                    currentGame = JSON.parse(gameDataString);
+                    sessionStorage.removeItem('initialGameData'); // Clear it after use
+                    setupGame();
+                } catch (e) {
+                    console.error('Error parsing game data:', e);
+                }
+            }
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+            ws.onopen = () => {
+                console.log('Connected to game server');
+                updateStatus('🔗 Connected to server...', 'playing');
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                handleMessage(msg);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('❌ Connection error', 'finished');
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from game server');
+                updateStatus('❌ Disconnected from server', 'finished');
+            };
+        }
+
+        function handleMessage(msg) {
+            console.log('Received:', msg);
+
+            switch(msg.type) {
+                case 'waiting':
+                    updateStatus('⏳ Waiting for game state...', 'waiting');
+                    break;
+                
+                case 'game_start':
+                    currentGame = msg.data;
+                    setupGame();
+                    break;
+
+                case 'game_update':
+                    if (!currentGame) {
+                        currentGame = msg.data;
+                        setupGame();
+                    } else {
+                        currentGame = msg.data;
+                        updateGame();
+                    }
+                    break;
+                
+                case 'reconnected':
+                    currentGame = msg.data;
+                    setupGame();
+                    updateStatus('✅ Reconnected successfully!', 'playing');
+                    break;
+                
+                case 'error':
+                    alert(msg.data.message);
+                    break;
+            }
+        }
+
+        function setupGame() {
+            if (!currentGame) return;
+
+            if (currentGame.player1 === currentUsername) {
+                myPlayerNum = 1;
+            } else {
+                myPlayerNum = 2;
+            }
+
+            document.querySelector('#player1Info .player-name').textContent = currentGame.player1;
+            document.querySelector('#player2Info .player-name').textContent = currentGame.player2;
+            
+            document.getElementById('gameMode').textContent = currentGame.isBot ? '🤖 vs Bot' : '👥 vs Player';
+
+            renderBoard();
+            updateGame();
+            updateStatus(`🎮 Game started! ${currentGame.isBot ? 'vs 🤖 Bot' : 'vs ' + (myPlayerNum === 1 ? currentGame.player2 : currentGame.player1)}`, 'playing');
+
+            gameStartTime = Date.now();
+            if (gameTimerInterval) clearInterval(gameTimerInterval);
+            gameTimerInterval = setInterval(updateTimer, 1000);
+            updateTimer();
+        }
+
+        function updateTimer() {
+            if (!gameStartTime) return;
+            
+            const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+            let formattedTime;
+            
+            if (elapsed < 60) {
+                formattedTime = `${elapsed}s`;
+            } else {
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                formattedTime = `${minutes}m ${seconds < 10 ? '0' : ''}${seconds}s`;
+            }
+            document.getElementById('gameTimer').textContent = formattedTime;
+        }
+
+        function renderBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            for (let row = 0; row < 6; row++) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'row';
+                
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = row;
+                    cell.dataset.col = col;
+                    cell.onclick = () => makeMove(col);
+                    rowDiv.appendChild(cell);
+                }
+                
+                board.appendChild(rowDiv);
+            }
+        }
+
+        function updateGame() {
+            if (!currentGame) return;
+
+            for (let row = 0; row < 6; row++) {
+                for (let col = 0; col < 7; col++) {
+                    const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                    if (!cell) continue;
+                    
+                    cell.className = 'cell';
+                    
+                    if (currentGame.board[row][col] === 1) {
+                        cell.classList.add('player1');
+                    } else if (currentGame.board[row][col] === 2) {
+                        cell.classList.add('player2');
+                    }
+                    
+                    if (currentGame.status !== 'playing' || currentGame.currentPlayer !== myPlayerNum) {
+                        cell.classList.add('disabled');
+                    }
+                }
+            }
+
+            document.getElementById('player1Info').classList.remove('active-player');
+            document.getElementById('player2Info').classList.remove('active-player');
+            
+            if (currentGame.status === 'playing') {
+                if (currentGame.currentPlayer === 1) {
+                    document.getElementById('player1Info').classList.add('active-player');
+                } else {
+                    document.getElementById('player2Info').classList.add('active-player');
+                }
+            }
+
+            if(currentGame.status === 'finished') {
+                let message = '';
+                if (currentGame.winner === 0) {
+                    message = "🤝 It's a draw!";
+                } else if (currentGame.winner === myPlayerNum) {
+                    message = "🎉 You won! Congratulations!";
+                    createConfetti();
+                } else {
+                    message = "😔 You lost. Better luck next time!";
+                }
+                updateStatus(message, 'finished');
+                
+                if (gameTimerInterval) clearInterval(gameTimerInterval);
+                
+                document.getElementById('playAgainButton').classList.remove('hidden');
+
+            } else if (currentGame.currentPlayer === myPlayerNum) {
+                updateStatus('✨ Your turn!', 'playing');
+            } else {
+                updateStatus('⏳ Opponent\'s turn...', 'playing');
+            }
+        }
+
+        function makeMove(col) {
+            if (!currentGame || currentGame.status !== 'playing' || currentGame.currentPlayer !== myPlayerNum) {
+                return;
+            }
+
+            ws.send(JSON.stringify({
+                type: 'move',
+                column: col
+            }));
+        }
+
+        function updateStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            const gameStatusEl = document.getElementById('gameStatus');
+            
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            gameStatusEl.textContent = message;
+        }
+
+        function createConfetti() {
+            const colors = ['#ff6b6b', '#ffd700', '#667eea', '#764ba2', '#f093fb', '#4ecdc4'];
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDelay = Math.random() * 2 + 's';
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => confetti.remove(), 3000);
+            }
+        }
+
+        function playAgain() {
+            sessionStorage.removeItem('currentUsername');
+            sessionStorage.removeItem('initialGameData');
+            window.location.href = '/';
+        }
+
+        function goHome() {
+            if (currentGame && currentGame.status === 'playing') {
+                if (!confirm('Game is still in progress. Are you sure you want to leave?')) {
+                    return;
+                }
+            }
+            sessionStorage.removeItem('currentUsername');
+            sessionStorage.removeItem('initialGameData');
+            window.location.href = '/';
+        }
+
+        // Initialize game on page load
+        window.onload = initGame;
+
+        // Handle page unload
+        window.onbeforeunload = () => {
+            if (ws) ws.close();
+        };
+    </script>
+</body>
+</html>

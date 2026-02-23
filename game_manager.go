@@ -3,15 +3,22 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+func init() {
+	// Initialize random seed for room code generation
+	rand.Seed(time.Now().UnixNano())
+}
+
 const (
 	matchmakingTimeout = 10 * time.Second
 	reconnectTimeout   = 30 * time.Second
+	privateRoomTimeout = 40 * time.Second // Expiration time for private rooms
 )
 
 // GameManager manages all active games and players.
@@ -19,14 +26,16 @@ type GameManager struct {
 	players       map[string]*Player // Keyed by username
 	games         map[string]*Game   // Keyed by game ID
 	waitingPlayer *Player
+	PrivateRooms  map[string]*Player // Keyed by room code (6-char alphanumeric)
 	mutex         sync.RWMutex
 }
 
 // NewGameManager creates a new game manager.
 func NewGameManager() *GameManager {
 	return &GameManager{
-		players: make(map[string]*Player),
-		games:   make(map[string]*Game),
+		players:      make(map[string]*Player),
+		games:        make(map[string]*Game),
+		PrivateRooms: make(map[string]*Player),
 	}
 }
 
@@ -52,6 +61,15 @@ func (gm *GameManager) UnregisterPlayer(player *Player) {
 		log.Printf("Waiting player %s disconnected.", player.Username)
 	}
 
+	// If player was hosting a private room, remove it
+	for roomCode, roomPlayer := range gm.PrivateRooms {
+		if roomPlayer == player {
+			delete(gm.PrivateRooms, roomCode)
+			log.Printf("Private room %s removed due to host %s disconnect.", roomCode, player.Username)
+			break
+		}
+	}
+
 	// If player was in a game
 	if player.Game != nil {
 		log.Printf("Player %s disconnected from game %s.", player.Username, player.Game.ID)
@@ -70,21 +88,34 @@ func (gm *GameManager) HandleMessage(player *Player, rawMsg []byte) {
 		return
 	}
 
+	log.Printf("Received message type: '%s' from player, username: '%s', roomCode: '%s'", msg.Type, msg.Username, msg.RoomCode) // DEBUG LOG
+
 	switch msg.Type {
 	case "join":
+		log.Printf("Handling join for username: %s", msg.Username) // DEBUG LOG
 		gm.handleJoin(player, msg.Username)
 	case "move":
 		gm.handleMove(player, msg.Column)
 	case "reconnect":
 		gm.handleReconnect(player, msg.Username)
+	case "create_private_room":
+		log.Printf("Handling create_private_room for username: %s", msg.Username) // DEBUG LOG
+		gm.handleCreatePrivateRoom(player, msg.Username)
+	case "join_private_room":
+		log.Printf("Handling join_private_room for username: %s, room: %s", msg.Username, msg.RoomCode) // DEBUG LOG
+		gm.handleJoinPrivateRoom(player, msg.Username, msg.RoomCode)
 	default:
+		log.Printf("Unknown message type: '%s'", msg.Type) // DEBUG LOG
 		player.SendError("Unknown message type.")
 	}
 }
 
 // handleJoin processes a new player's request to join a game.
 func (gm *GameManager) handleJoin(player *Player, username string) {
+	log.Printf("DEBUG handleJoin: entered, username=%s", username)
+
 	if username == "" {
+		log.Printf("DEBUG handleJoin: username empty")
 		player.SendError("Username cannot be empty.")
 		return
 	}
@@ -94,6 +125,7 @@ func (gm *GameManager) handleJoin(player *Player, username string) {
 
 	if _, exists := gm.players[username]; exists {
 		// This could be a reconnect attempt, but "join" is for new games
+		log.Printf("DEBUG handleJoin: username %s already exists", username)
 		player.SendError("Username already taken. Try 'reconnect' if you were in a game.")
 		return
 	}
@@ -104,11 +136,14 @@ func (gm *GameManager) handleJoin(player *Player, username string) {
 
 	if gm.waitingPlayer == nil {
 		// This is the first player, make them wait
+		log.Printf("DEBUG handleJoin: %s becomes waiting player", username)
 		gm.waitingPlayer = player
 		player.SendMessage("waiting", nil)
 
 		// Start the 10-second bot timer
+		log.Printf("DEBUG handleJoin: starting matchmaking timer for %s", username)
 		time.AfterFunc(matchmakingTimeout, func() {
+			log.Printf("DEBUG: Bot timer fired for %s", username)
 			gm.startBotGame(player)
 		})
 	} else {
@@ -116,6 +151,7 @@ func (gm *GameManager) handleJoin(player *Player, username string) {
 		if gm.waitingPlayer == player {
 			return // Should not happen, but safeguard
 		}
+		log.Printf("DEBUG handleJoin: matching %s with waiting player %s", username, gm.waitingPlayer.Username)
 		opponent := gm.waitingPlayer
 		gm.waitingPlayer = nil
 		gm.startGame(opponent, player)
@@ -209,4 +245,137 @@ func (gm *GameManager) startBotGame(player *Player) {
 		"isBot":    true,
 		"gameTime": game.StartTime.Unix(),
 	})
+}
+
+// generateRoomCode generates a random 6-character alphanumeric room code.
+func (gm *GameManager) generateRoomCode() string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const codeLength = 6
+
+	for {
+		code := make([]byte, codeLength)
+		for i := range code {
+			code[i] = charset[rand.Intn(len(charset))]
+		}
+		roomCode := string(code)
+
+		// Ensure uniqueness (check if code already exists)
+		gm.mutex.RLock()
+		_, exists := gm.PrivateRooms[roomCode]
+		gm.mutex.RUnlock()
+
+		if !exists {
+			return roomCode
+		}
+	}
+}
+
+// handleCreatePrivateRoom creates a new private room with a unique code.
+func (gm *GameManager) handleCreatePrivateRoom(player *Player, username string) {
+	log.Printf("DEBUG: Entering handleCreatePrivateRoom, username: %s", username)
+
+	if username == "" {
+		log.Printf("DEBUG: Username is empty, sending error")
+		player.SendError("Username cannot be empty.")
+		return
+	}
+
+	// Generate unique room code BEFORE acquiring lock to avoid deadlock
+	roomCode := gm.generateRoomCode()
+	log.Printf("DEBUG: Generated room code: %s", roomCode)
+
+	gm.mutex.Lock()
+	log.Printf("DEBUG: Acquired lock, checking username availability")
+
+	// Check if username is already taken
+	if _, exists := gm.players[username]; exists {
+		log.Printf("DEBUG: Username %s already taken", username)
+		gm.mutex.Unlock()
+		player.SendError("Username already taken.")
+		return
+	}
+
+	// Register the player
+	player.Username = username
+	gm.players[username] = player
+	log.Printf("DEBUG: Player %s registered", username)
+
+	// Store player in private rooms
+	gm.PrivateRooms[roomCode] = player
+
+	log.Printf("Player %s created private room: %s", username, roomCode)
+	gm.mutex.Unlock()
+	log.Printf("DEBUG: Lock released")
+
+	// Send room code back to the client
+	log.Printf("DEBUG: About to send private_room_created message with code: %s", roomCode)
+	player.SendMessage("private_room_created", map[string]interface{}{
+		"roomCode": roomCode,
+	})
+	log.Printf("DEBUG: Sent private_room_created message")
+
+	// Start 40-second expiration timer
+	time.AfterFunc(privateRoomTimeout, func() {
+		gm.mutex.Lock()
+		defer gm.mutex.Unlock()
+
+		// Check if room still exists (not joined)
+		if roomPlayer, exists := gm.PrivateRooms[roomCode]; exists && roomPlayer == player {
+			// Room expired, clean up
+			delete(gm.PrivateRooms, roomCode)
+			log.Printf("Private room %s expired for player %s", roomCode, username)
+
+			// Notify the player
+			player.SendMessage("private_room_expired", map[string]interface{}{
+				"message": "No one joined your room. It has expired.",
+			})
+		}
+	})
+}
+
+// handleJoinPrivateRoom allows a player to join an existing private room.
+func (gm *GameManager) handleJoinPrivateRoom(player *Player, username, roomCode string) {
+	if username == "" {
+		player.SendError("Username cannot be empty.")
+		return
+	}
+
+	if roomCode == "" {
+		player.SendError("Room code cannot be empty.")
+		return
+	}
+
+	gm.mutex.Lock()
+	defer gm.mutex.Unlock()
+
+	// Check if username is already taken
+	if _, exists := gm.players[username]; exists {
+		player.SendError("Username already taken.")
+		return
+	}
+
+	// Check if room exists
+	roomHost, exists := gm.PrivateRooms[roomCode]
+	if !exists {
+		player.SendError("Invalid or expired room code.")
+		return
+	}
+
+	// Prevent player from joining their own room
+	if roomHost.Username == username {
+		player.SendError("You cannot join your own room.")
+		return
+	}
+
+	// Register the joining player
+	player.Username = username
+	gm.players[username] = player
+
+	// Remove room from private rooms (it's now matched)
+	delete(gm.PrivateRooms, roomCode)
+
+	log.Printf("Player %s joined private room %s (host: %s)", username, roomCode, roomHost.Username)
+
+	// Start the game
+	gm.startGame(roomHost, player)
 }

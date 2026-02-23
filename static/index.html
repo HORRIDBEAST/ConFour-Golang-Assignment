@@ -237,6 +237,14 @@
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
         }
 
+        #roomCodeInput {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 4px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
         .btn-primary {
             width: 100%;
             padding: 18px;
@@ -801,7 +809,33 @@
                 <div id="loginScreen" class="login-form">
                     <h2>🎯 Enter Your Username</h2>
                     <input type="text" id="usernameInput" placeholder="Your username..." maxlength="20">
-                    <button class="btn-primary" onclick="joinGame()">🚀 Join Game</button>
+                    
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                        <button class="btn-primary" style="flex: 1;" onclick="joinQuickMatch()">⚡ Quick Match</button>
+                        <button class="btn-primary" style="flex: 1;" onclick="createPrivateRoom()">👥 Play with Friend</button>
+                    </div>
+
+                    <div style="border-top: 2px solid #ddd; padding-top: 20px; margin-top: 10px;">
+                        <h3 style="margin-bottom: 15px; color: #666; font-size: 1.1em;">Join Friend's Room</h3>
+                        <input type="text" id="roomCodeInput" placeholder="Enter 6-character room code..." maxlength="6" style="text-transform: uppercase; margin-bottom: 10px;">
+                        <button class="btn-primary" onclick="joinPrivateRoom()">🔗 Join Private Room</button>
+                    </div>
+                </div>
+
+                <div id="privateRoomWaiting" class="login-form hidden">
+                    <h2>🎉 Private Room Created!</h2>
+                    <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 15px; margin: 20px 0;">
+                        <p style="margin-bottom: 10px; font-size: 0.9em;">Your Room Code:</p>
+                        <h1 id="displayRoomCode" style="font-size: 3em; letter-spacing: 8px; margin: 10px 0;">------</h1>
+                        <p style="font-size: 0.9em; opacity: 0.9;">Share this code with your friend</p>
+                    </div>
+                    
+                    <div style="background: #fff3cd; color: #856404; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #ffc107;">
+                        <p style="margin: 0;">⏱️ Time remaining: <span id="roomTimer" style="font-weight: bold; font-size: 1.2em;">40s</span></p>
+                    </div>
+
+                    <button class="btn-primary" onclick="shareRoomCode()" style="margin-bottom: 10px;">📤 Share Invite Link</button>
+                    <button class="btn-primary" onclick="cancelPrivateRoom()" style="background: linear-gradient(135deg, #dc3545, #c82333);">❌ Cancel</button>
                 </div>
 
                 <div id="gameScreen" class="hidden">
@@ -886,9 +920,27 @@
         let gameTimerInterval;
         let gameStartTime;
 
+        // Private room variables
+        let currentRoomCode = null;
+        let roomTimerInterval = null;
+        let roomExpirationTime = null;
+
         const rulesModal = document.getElementById('rulesModal');
         const closeModalBtn = document.getElementById('closeModalBtn');
         const proceedButton = document.getElementById('proceedButton');
+
+        // Check for room code in URL on page load
+        window.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomCode = urlParams.get('room');
+            
+            if (roomCode) {
+                // Auto-fill room code input
+                document.getElementById('roomCodeInput').value = roomCode.toUpperCase();
+                // Show alert to user
+                alert(`You've been invited to join room: ${roomCode.toUpperCase()}\n\nPlease enter your username and click "Join Private Room"`);
+            }
+        });
 
         function createConfetti() {
             const colors = ['#ffd700', '#ff6b6b', '#4ecdc4', '#45b7d1', '#f093fb', '#667eea'];
@@ -910,7 +962,7 @@
             }
         }
 
-        function joinGame() {
+        function joinQuickMatch() {
             const username = document.getElementById('usernameInput').value.trim();
             if (!username) {
                 alert('Please enter a username');
@@ -921,9 +973,133 @@
             rulesModal.style.display = 'block';
         }
 
+        function createPrivateRoom() {
+            const username = document.getElementById('usernameInput').value.trim();
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            currentUsername = username;
+            
+            // Connect to WebSocket and request private room creation
+            connectWebSocket('create_private_room');
+        }
+
+        function joinPrivateRoom() {
+            const username = document.getElementById('usernameInput').value.trim();
+            const roomCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
+            
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            
+            if (!roomCode || roomCode.length !== 6) {
+                alert('Please enter a valid 6-character room code');
+                return;
+            }
+            
+            currentUsername = username;
+            currentRoomCode = roomCode;
+            
+            // Connect to WebSocket and request to join private room
+            connectWebSocket('join_private_room');
+        }
+
+        function shareRoomCode() {
+            if (!currentRoomCode) return;
+            
+            const shareUrl = window.location.origin + window.location.pathname + '?room=' + currentRoomCode;
+            const shareText = `Join my 4 in a Row game! Room Code: ${currentRoomCode}`;
+            
+            // Try native Web Share API first (mobile-friendly)
+            if (navigator.share) {
+                navigator.share({
+                    title: '4 in a Row - Join My Game',
+                    text: shareText,
+                    url: shareUrl
+                }).then(() => {
+                    console.log('Shared successfully');
+                }).catch((error) => {
+                    console.log('Error sharing:', error);
+                    fallbackCopyToClipboard(shareUrl);
+                });
+            } else {
+                // Fallback to clipboard
+                fallbackCopyToClipboard(shareUrl);
+            }
+        }
+
+        function fallbackCopyToClipboard(text) {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert('Invite link copied to clipboard!\n\n' + text);
+                }).catch(() => {
+                    promptManualCopy(text);
+                });
+            } else {
+                promptManualCopy(text);
+            }
+        }
+
+        function promptManualCopy(text) {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                alert('Invite link copied to clipboard!\n\n' + text);
+            } catch (err) {
+                alert('Please copy this link manually:\n\n' + text);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function cancelPrivateRoom() {
+            // Clean up room timer
+            if (roomTimerInterval) {
+                clearInterval(roomTimerInterval);
+                roomTimerInterval = null;
+            }
+            
+            // Reset UI
+            document.getElementById('privateRoomWaiting').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            
+            currentRoomCode = null;
+            roomExpirationTime = null;
+            
+            // Close WebSocket
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function startRoomTimer() {
+            roomExpirationTime = Date.now() + 40000; // 40 seconds from now
+            
+            function updateTimer() {
+                const remaining = Math.max(0, Math.ceil((roomExpirationTime - Date.now()) / 1000));
+                document.getElementById('roomTimer').textContent = remaining + 's';
+                
+                if (remaining <= 0) {
+                    clearInterval(roomTimerInterval);
+                    roomTimerInterval = null;
+                }
+            }
+            
+            updateTimer(); // Run immediately
+            roomTimerInterval = setInterval(updateTimer, 100); // Update every 100ms for smooth countdown
+        }
+
         function startConnection() {
             rulesModal.style.display = 'none';
-            connectWebSocket();
+            connectWebSocket('join'); // Standard quick match
         }
 
         closeModalBtn.onclick = startConnection;
@@ -934,7 +1110,7 @@
             }
         }
 
-        function connectWebSocket() {
+        function connectWebSocket(messageType = 'join') {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws`;
             
@@ -942,13 +1118,37 @@
 
             ws.onopen = () => {
                 console.log('Connected to server');
-                ws.send(JSON.stringify({
-                    type: 'join',
-                    username: currentUsername
-                }));
                 
-                document.getElementById('loginScreen').classList.add('hidden');
-                document.getElementById('gameScreen').classList.remove('hidden');
+                // Send appropriate message based on connection type
+                if (messageType === 'create_private_room') {
+                    const message = {
+                        type: 'create_private_room',
+                        username: currentUsername
+                    };
+                    console.log('Sending message:', message); // DEBUG
+                    ws.send(JSON.stringify(message));
+                    // Don't hide login screen yet - wait for room creation confirmation
+                } else if (messageType === 'join_private_room') {
+                    const message = {
+                        type: 'join_private_room',
+                        username: currentUsername,
+                        roomCode: currentRoomCode
+                    };
+                    console.log('Sending message:', message); // DEBUG
+                    ws.send(JSON.stringify(message));
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('gameScreen').classList.remove('hidden');
+                } else {
+                    // Standard quick match
+                    const message = {
+                        type: 'join',
+                        username: currentUsername
+                    };
+                    console.log('Sending message:', message); // DEBUG
+                    ws.send(JSON.stringify(message));
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('gameScreen').classList.remove('hidden');
+                }
             };
 
             ws.onmessage = (event) => {
@@ -989,20 +1189,53 @@
 
         function handleMessage(msg) {
             console.log('Received:', msg);
+            console.log('Message type:', msg.type); // DEBUG
 
             switch(msg.type) {
                 case 'waiting':
+                    console.log('Handling waiting message'); // DEBUG
                     updateStatus('⏳ Waiting for opponent...', 'waiting');
                     break;
                 
+                case 'private_room_created':
+                    console.log('Private room created with code:', msg.data.roomCode); // DEBUG
+                    // Room created successfully
+                    currentRoomCode = msg.data.roomCode;
+                    document.getElementById('displayRoomCode').textContent = currentRoomCode;
+                    
+                    // Show private room waiting screen
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('privateRoomWaiting').classList.remove('hidden');
+                    
+                    // Start countdown timer
+                    startRoomTimer();
+                    break;
+                
+                case 'private_room_expired':
+                    // Room expired
+                    alert(msg.data.message || 'Your private room has expired.');
+                    cancelPrivateRoom();
+                    break;
+                
                 case 'game_start': 
-                    currentGame = msg.data;
-                    setupGame();
+                    // Store game data and redirect to play page
+                    sessionStorage.setItem('currentUsername', currentUsername);
+                    sessionStorage.setItem('initialGameData', JSON.stringify(msg.data));
+                    
+                    // Close WebSocket before redirect
+                    if (ws) {
+                        ws.onclose = null; // Prevent reconnection attempts
+                        ws.close();
+                    }
+                    
+                    // Redirect to game page
+                    window.location.href = '/play.html';
                     break;
 
                 case 'game_update':
                     if (!currentGame) {
                         currentGame = msg.data;
+                        document.getElementById('gameScreen').classList.remove('hidden');
                         setupGame();
                     } else {
                         currentGame = msg.data;
@@ -1020,6 +1253,10 @@
                     alert(msg.data.message);
                     if (msg.data.message.includes("Username already taken")) {
                         playAgain();
+                    } else if (msg.data.message.includes("room code")) {
+                        // Error with room code - stay on login screen
+                        document.getElementById('roomCodeInput').value = '';
+                        document.getElementById('roomCodeInput').focus();
                     }
                     break;
             }
@@ -1145,20 +1382,31 @@
 
         function playAgain() {
             document.getElementById('gameScreen').classList.add('hidden');
+            document.getElementById('privateRoomWaiting').classList.add('hidden');
             document.getElementById('loginScreen').classList.remove('hidden');
 
             document.getElementById('playAgainButton').classList.add('hidden');
             
             document.getElementById('usernameInput').value = '';
+            document.getElementById('roomCodeInput').value = '';
             document.getElementById('board').innerHTML = '';
             document.getElementById('gameTimer').textContent = '0s';
             updateStatus('⏳ Waiting for opponent...', 'waiting');
             document.getElementById('gameStatus').textContent = '⏳ Waiting...';
             
+            // Clean up room timer if active
+            if (roomTimerInterval) {
+                clearInterval(roomTimerInterval);
+                roomTimerInterval = null;
+            }
+            
             currentGame = null;
             currentUsername = null;
             myPlayerNum = null;
             gameStartTime = null;
+            currentRoomCode = null;
+            roomExpirationTime = null;
+            
             if (gameTimerInterval) clearInterval(gameTimerInterval);
 
             if (ws) {

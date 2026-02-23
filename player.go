@@ -23,6 +23,7 @@ type Message struct {
 	Type     string          `json:"type"`
 	Username string          `json:"username,omitempty"`
 	Column   int             `json:"column,omitempty"`
+	RoomCode string          `json:"roomCode,omitempty"` // For private room feature
 	Data     json.RawMessage `json:"data,omitempty"`
 }
 
@@ -64,6 +65,7 @@ func (p *Player) ReadMessages() {
 			}
 			break
 		}
+		log.Printf("Raw message received: %s", string(message)) // DEBUG
 		p.Manager.HandleMessage(p, message)
 	}
 }
@@ -79,6 +81,7 @@ func (p *Player) WriteMessages() {
 	for {
 		select {
 		case message, ok := <-p.Send:
+			log.Printf("DEBUG WriteMessages: received from channel, ok=%v, msg=%s, player=%s", ok, string(message), p.Username) // DEBUG
 			p.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The manager closed the channel.
@@ -90,6 +93,7 @@ func (p *Player) WriteMessages() {
 				log.Printf("Player write error: %v", err)
 				return
 			}
+			log.Printf("DEBUG WriteMessages: successfully wrote message to WebSocket, player=%s", p.Username) // DEBUG
 		case <-ticker.C:
 			p.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := p.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
@@ -101,12 +105,15 @@ func (p *Player) WriteMessages() {
 
 // SendMessage sends a marshaled JSON message to the player.
 func (p *Player) SendMessage(msgType string, data interface{}) {
+	log.Printf("DEBUG SendMessage: type=%s, data=%+v, player=%s", msgType, data, p.Username) // DEBUG
 	payload, err := json.Marshal(map[string]interface{}{"type": msgType, "data": data})
 	if err != nil {
 		log.Printf("Failed to marshal message: %v", err)
 		return
 	}
+	log.Printf("DEBUG SendMessage: marshaled payload: %s", string(payload)) // DEBUG
 	p.Send <- payload
+	log.Printf("DEBUG SendMessage: sent to channel") // DEBUG
 }
 
 // SendError sends an error message to the player.

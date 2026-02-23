@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"log"
 	"sync"
@@ -365,14 +364,20 @@ func (g *Game) HandleReconnect(oldPlayer *Player, newConn *websocket.Conn) {
 
 	log.Printf("Player %s reconnected to game %s.", oldPlayer.Username, g.ID)
 
-	// Close the old connection just in case
+	// Close the old connection and channel
+	oldPlayer.mutex.Lock()
 	oldPlayer.Conn.Close()
+	close(oldPlayer.Send)
 
-	// Assign new connection
+	// Assign new connection and create new Send channel
 	oldPlayer.Conn = newConn
+	oldPlayer.Send = make(chan []byte, 256)
+	oldPlayer.mutex.Unlock()
 
-	// Re-send the game state
+	// Restart the WriteMessages goroutine
+	go oldPlayer.WriteMessages()
+
+	// Re-send the game state using SendMessage (which is now safe)
 	state := g.CreateState()
-	payload, _ := json.Marshal(map[string]interface{}{"type": "reconnected", "data": state})
-	oldPlayer.Send <- payload
+	oldPlayer.SendMessage("reconnected", state)
 }
